@@ -1,0 +1,161 @@
+Here's a comprehensive, reusable migration prompt you can feed into an AI (or use yourself as a checklist driver):
+
+---
+
+## 🧩 Migration Prompt
+
+```
+You are a senior Java automation engineer. 
+Your task is to migrate an existing test automation framework from JUnit 4.11 
+to TestNG (latest version compatible with Java 21).
+
+The current tech stack is:
+- Java 21
+- Cucumber (BDD)
+- Selenium WebDriver
+- JUnit 4.11
+- Maven
+
+---
+
+## MIGRATION SCOPE
+
+### 1. pom.xml Changes
+- Remove: `junit:junit:4.11` dependency
+- Remove: `cucumber-junit` dependency
+- Add: `org.testng:testng` — use the latest stable version compatible with Java 21
+- Add: `io.cucumber:cucumber-testng` — version must be compatible with the 
+  Cucumber version already in the project
+- Update: maven-surefire-plugin configuration to support TestNG and `testng.xml`
+- Ensure: No version conflicts between cucumber-testng, testng, and selenium
+
+---
+
+### 2. Test Runner Class Migration
+- Find all classes annotated with `@RunWith(Cucumber.class)`
+- Remove `@RunWith(Cucumber.class)` annotation
+- Make the runner class extend `AbstractTestNGCucumberTests`
+- Retain all existing `@CucumberOptions` as-is (features, glue, plugin, tags, etc.)
+- If parallel scenario execution is needed, override the `scenarios()` method 
+  with `@DataProvider(parallel = true)`
+
+Expected output:
+@CucumberOptions(
+    features = "src/test/resources/features",
+    glue = "com.example.stepdefs",
+    plugin = {"pretty", "html:target/cucumber-reports"}
+)
+public class TestRunner extends AbstractTestNGCucumberTests {
+    @Override
+    @DataProvider(parallel = true)
+    public Object[][] scenarios() {
+        return super.scenarios();
+    }
+}
+
+---
+
+### 3. Annotation Migration
+Replace all JUnit lifecycle annotations with TestNG equivalents 
+across ALL classes in src/test/java:
+
+| From (JUnit)       | To (TestNG)              | Import                          |
+|--------------------|--------------------------|----------------------------------|
+| @Before            | @BeforeMethod            | org.testng.annotations.*        |
+| @After             | @AfterMethod             | org.testng.annotations.*        |
+| @BeforeClass       | @BeforeClass             | org.testng.annotations.*        |
+| @AfterClass        | @AfterClass              | org.testng.annotations.*        |
+| @Ignore            | @Test(enabled = false)   | org.testng.annotations.*        |
+| @Test(expected=X)  | @Test(expectedExceptions=X) | org.testng.annotations.*     |
+
+⚠️ Do NOT change Cucumber's own @Before/@After from io.cucumber.java — 
+   those are framework-level hooks and must remain untouched.
+
+---
+
+### 4. Import Cleanup
+- Remove all: `import org.junit.*`
+- Add: `import org.testng.annotations.*` wherever lifecycle annotations are used
+- Replace: `import org.junit.Assert` → `import org.testng.Assert`
+
+---
+
+### 5. Assertion Migration
+- Find all usages of `org.junit.Assert.*`
+- Replace with `org.testng.Assert.*`
+- ⚠️ CRITICAL: Reverse the argument order for all assertions:
+    JUnit  → Assert.assertEquals(expected, actual)
+    TestNG → Assert.assertEquals(actual, expected)
+- Apply this reversal to: assertEquals, assertNotEquals, assertSame, 
+  assertNotSame, assertTrue, assertFalse, assertNull, assertNotNull
+
+---
+
+### 6. @Rule Replacements
+- JUnit's `@Rule` has no direct TestNG equivalent
+- Identify all @Rule usages (e.g., TestWatcher, TemporaryFolder, ExpectedException)
+- Migrate them as follows:
+    - TestWatcher     → @BeforeMethod / @AfterMethod with ITestResult injection
+    - ExpectedException → @Test(expectedExceptions = X.class)
+    - TemporaryFolder → Manual setup/teardown in @BeforeMethod / @AfterMethod
+
+---
+
+### 7. testng.xml Setup
+Create a `testng.xml` file at the project root with:
+- Suite-level parallel configuration (parallel="methods" or "tests")
+- Thread count appropriate for the environment (suggest: 4)
+- Class reference pointing to the runner class
+- Listener hooks if any custom TestNG listeners are needed
+
+---
+
+### 8. Maven Surefire Plugin Update
+Update the surefire plugin in pom.xml to:
+- Point to `testng.xml` as the suite file
+- Remove any JUnit-specific configurations
+- Set `forkCount` and `reuseForks` if parallel execution is configured
+
+---
+
+### 9. Validation Checklist (run after migration)
+Confirm the following before finalizing:
+[ ] `mvn clean test` runs without compilation errors
+[ ] All existing scenarios execute and produce the same pass/fail results
+[ ] Cucumber HTML/JSON reports are generated correctly
+[ ] No residual `org.junit` imports exist in the codebase
+[ ] `@Before`/`@After` in step definition files still use `io.cucumber.java`
+[ ] Assert argument order has been reversed correctly everywhere
+[ ] Parallel execution works if configured
+
+---
+
+### CONSTRAINTS
+- Do not change any feature files (.feature)
+- Do not change step definition logic — only annotations and imports
+- Do not upgrade Selenium or Cucumber versions unless a conflict forces it
+- Preserve all existing @CucumberOptions configurations
+- Java version target remains Java 21 — use appropriate TestNG version 
+  (TestNG 7.8+ supports Java 21)
+
+---
+
+### OUTPUT FORMAT
+For each file changed, provide:
+1. The filename and path
+2. A clear before/after diff
+3. A short reason for the change
+
+Flag any ambiguous cases or files that need manual review.
+```
+
+---
+
+## 💡 How to Use This Prompt
+
+| Scenario | How to apply |
+|---|---|
+| **AI-assisted migration** | Paste this prompt + attach your `pom.xml` and runner class |
+| **File-by-file review** | Add `"Here is the file: [paste code]"` at the bottom |
+| **Full project scan** | Append a zip/file tree and ask it to list all affected files first |
+| **Incremental migration** | Use each numbered section as a standalone sub-prompt |
